@@ -5,7 +5,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, CheckCircle2, CalendarDays, CalendarRange, ListChecks, Sparkles, IndianRupee, Repeat, Search, Calendar } from "lucide-react";
+import { PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, CheckCircle2, CalendarDays, CalendarRange, ListChecks, Sparkles, IndianRupee, Repeat, Search } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
@@ -711,7 +711,7 @@ export default function BudgetsPage() {
             <Button onClick={handleOpenSubscriptionHelper} variant="outline" className="rounded-full shadow-sm hover:shadow-md transition-shadow">
               <ListChecks className="mr-2 h-5 w-5" /> Subscription Budget Helper
             </Button>
-            <Button onClick={handleDetectSubscriptions} variant="outline" className="rounded-full shadow-sm hover:shadow-md transition-shadow">
+            <Button onClick={() => setShowSubscriptionDialog(true)} variant="outline" className="rounded-full shadow-sm hover:shadow-md transition-shadow">
               <Search className="mr-2 h-5 w-5" /> Detect Subscriptions
             </Button>
             <Button onClick={openNewDialog} className="rounded-full shadow-md hover:shadow-lg transition-shadow bg-gradient-to-br from-[hsl(var(--primary-gradient-start))] to-[hsl(var(--primary-gradient-end))] text-primary-foreground">
@@ -975,155 +975,6 @@ export default function BudgetsPage() {
             )}
           </div>
           <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline" className="rounded-full">Close</Button>
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Subscription Detection Dialog */}
-      <Dialog open={showSubscriptionDialog} onOpenChange={setShowSubscriptionDialog}>
-        <DialogContent className="sm:max-w-2xl rounded-lg p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="font-headline flex items-center gap-2">
-              <Search className="h-6 w-6 text-primary" />
-              Subscription Detection
-            </DialogTitle>
-            <DialogDescription>
-              Advanced pattern analysis to detect recurring subscriptions and payments from your transaction history.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 max-h-[70vh] overflow-y-auto space-y-4 pr-2">
-            {isSubscriptionLoading && (
-              <div className="flex justify-center items-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="ml-2 text-muted-foreground">Analyzing transaction patterns...</p>
-              </div>
-            )}
-            {!isSubscriptionLoading && subscriptionResults === null && (
-              <div className="text-center py-8">
-                <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">Ready to analyze your transactions for subscription patterns.</p>
-              </div>
-            )}
-            {!isSubscriptionLoading && subscriptionResults && (
-              <div className="space-y-6">
-                {/* Subscriptions Section */}
-                {subscriptionResults.subscriptions.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                      <Repeat className="h-5 w-5 text-green-600" />
-                      Detected Subscriptions ({subscriptionResults.subscriptions.length})
-                    </h3>
-                    <div className="space-y-2">
-                      {subscriptionResults.subscriptions.map((subscription, index) => (
-                        <Card key={index} className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 p-3">
-                          <div className="flex justify-between items-center gap-2">
-                            <div className="flex-grow min-w-0">
-                              <p className="font-semibold truncate">{subscription.name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                ₹{subscription.amount.toFixed(2)} · {subscription.frequency} · {subscription.category}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {subscription.transactionCount} transactions · {Math.round(subscription.confidence * 100)}% confidence
-                              </p>
-                            </div>
-                            <Button 
-                              size="sm" 
-                              onClick={() => handleCreateBudgetsFromSubscriptions([subscription])}
-                              className="rounded-full flex-shrink-0"
-                            >
-                              <PlusCircle className="mr-1.5 h-4 w-4" /> Create Budget
-                            </Button>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Recurring Payments Section */}
-                {subscriptionResults.recurringPayments.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                      <Calendar className="h-5 w-5 text-blue-600" />
-                      Recurring Payments ({subscriptionResults.recurringPayments.length})
-                    </h3>
-                    <div className="space-y-2">
-                      {subscriptionResults.recurringPayments.map((payment, index) => (
-                        <Card key={index} className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 p-3">
-                          <div className="flex justify-between items-center gap-2">
-                            <div className="flex-grow min-w-0">
-                              <p className="font-semibold truncate">{payment.name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                ₹{payment.amount.toFixed(2)} · {payment.frequency} · {payment.category}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {payment.transactionCount} transactions · {Math.round(payment.confidence * 100)}% confidence
-                              </p>
-                            </div>
-                            <Button 
-                              size="sm" 
-                              onClick={() => handleCreateBudgetsFromSubscriptions([payment])}
-                              className="rounded-full flex-shrink-0"
-                            >
-                              <PlusCircle className="mr-1.5 h-4 w-4" /> Create Budget
-                            </Button>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Summary Section */}
-                {(subscriptionResults.subscriptions.length > 0 || subscriptionResults.recurringPayments.length > 0) && (
-                  <div className="bg-muted/50 p-4 rounded-lg">
-                    <h4 className="font-semibold mb-2">Summary</h4>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">Total Monthly Impact</p>
-                        <p className="font-semibold">₹{subscriptionResults.suggestions.totalMonthlySubscriptions.toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Potential Savings</p>
-                        <p className="font-semibold text-orange-600">₹{subscriptionResults.suggestions.potentialSavings.toFixed(2)}</p>
-                      </div>
-                    </div>
-                    {subscriptionResults.suggestions.unusedSubscriptions.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs text-muted-foreground">
-                          {subscriptionResults.suggestions.unusedSubscriptions.length} potentially unused subscription(s) identified
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* No Results */}
-                {subscriptionResults.subscriptions.length === 0 && subscriptionResults.recurringPayments.length === 0 && (
-                  <div className="text-center py-8">
-                    <AlertTriangle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">No recurring patterns detected in your recent transactions.</p>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Try importing more transaction data or check back after a few more months of spending activity.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          <DialogFooter className="flex gap-2">
-            {subscriptionResults && (subscriptionResults.subscriptions.length > 0 || subscriptionResults.recurringPayments.length > 0) && (
-              <Button 
-                onClick={() => handleCreateBudgetsFromSubscriptions([...subscriptionResults.subscriptions, ...subscriptionResults.recurringPayments])}
-                className="rounded-full"
-              >
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Create All Budgets
-              </Button>
-            )}
             <DialogClose asChild>
               <Button variant="outline" className="rounded-full">Close</Button>
             </DialogClose>

@@ -5,7 +5,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, CheckCircle2, CalendarDays, CalendarRange, ListChecks, Sparkles, IndianRupee, Repeat, Search, Calendar } from "lucide-react";
+import { PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, CheckCircle2, CalendarDays, CalendarRange, ListChecks, Sparkles, IndianRupee, Repeat } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
@@ -25,8 +25,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { addBudget as addBudgetService, updateBudget as updateBudgetService, deleteBudget as deleteBudgetService, getBudgets as fetchBudgetsService, type Budget, type NewBudgetData, type UpdateBudgetData, type BudgetPeriodType, getCurrentMonthValue, getCurrentYearValue } from "@/services/budgetService"; 
 import { getTransactions as fetchTransactionsService, type Transaction as ExpenseTransaction } from "@/services/transactionService"; 
 import { auditRecurringExpenses } from "@/ai/flows";
-import type { AuditRecurringExpensesInput } from "@/ai/flows/audit-recurring-expenses";
-import { detectSubscriptionsFromTransactions, createBudgetsForSubscriptions, type DetectedSubscription, type SubscriptionDetectionResult } from "@/lib/subscriptionDetection";
+import type { AuditRecurringExpensesInput, IdentifiedRecurringExpense } from "@/ai/flows/audit-recurring-expenses";
+import { detectSubscriptionsFromTransactions, createBudgetsForSubscriptions, type DetectedSubscription } from "@/lib/subscriptionDetection";
 import { collection, query, onSnapshot, Unsubscribe } from "firebase/firestore"; 
 import { db } from "@/lib/firebase";
 import type { Timestamp as FirestoreTimestamp } from "firebase/firestore";
@@ -34,14 +34,6 @@ import { FaqSection } from "@/components/common/faq-section";
 import { format, parseISO, startOfMonth, endOfMonth, startOfYear, endOfYear, isValid as isValidDateFn, formatISO, subMonths, getYear as dateFnsGetYear, getMonth as dateFnsGetMonth } from "date-fns";
 
 const GUEST_USER_ID = "GUEST_USER_ID";
-
-interface IdentifiedRecurringExpense {
-  likelyServiceName: string;
-  estimatedMonthlyCost: number;
-  lastPaymentDate?: string;
-  transactionExamples: string[];
-  suggestion: string;
-}
 
 interface DisplayBudget extends Budget {
   calculatedTransactionSpent: number; 
@@ -173,9 +165,6 @@ export default function BudgetsPage() {
   const [isHelperDialogOpen, setIsHelperDialogOpen] = useState(false);
   const [helperResults, setHelperResults] = useState<IdentifiedRecurringExpense[] | null>(null);
   const [isHelperLoading, setIsHelperLoading] = useState(false);
-  const [showSubscriptionDialog, setShowSubscriptionDialog] = useState(false);
-  const [subscriptionResults, setSubscriptionResults] = useState<SubscriptionDetectionResult | null>(null);
-  const [isSubscriptionLoading, setIsSubscriptionLoading] = useState(false);
 
 
   const { toast } = useToast();
@@ -616,71 +605,6 @@ export default function BudgetsPage() {
     }
   };
 
-  const handleDetectSubscriptions = async () => {
-    if (!user) {
-        toast({ title: "Access Denied", description: "Please log in or use Guest Mode.", variant: "destructive" });
-        return;
-    }
-    setIsSubscriptionLoading(true);
-    setSubscriptionResults(null);
-    setShowSubscriptionDialog(true);
-
-    try {
-        let transactionsForDetection = allTransactions;
-        if (isGuest || user.uid === GUEST_USER_ID) { 
-           transactionsForDetection = await fetchTransactionsService(GUEST_USER_ID).then(txs => txs.filter(t => t.type === 'expense' || t.type === 'subscription'));
-        }
-
-        const sixMonthsAgo = format(subMonths(new Date(), 6), 'yyyy-MM-dd'); 
-        const relevantTransactions = transactionsForDetection
-            .filter(t => (t.type === 'expense' || t.type === 'subscription') && t.date >= sixMonthsAgo);
-
-        if (relevantTransactions.length === 0) {
-            toast({ title: "Insufficient Data", description: "No expense/subscription transactions found in the last 6 months to analyze.", variant: "default" });
-            setSubscriptionResults(null);
-            setIsSubscriptionLoading(false);
-            return;
-        }
-
-        const detected = await detectSubscriptionsFromTransactions(relevantTransactions);
-        setSubscriptionResults(detected);
-        
-        if (detected.subscriptions.length === 0 && detected.recurringPayments.length === 0) {
-            toast({ title: "No Subscriptions Detected", description: "No recurring subscription patterns were found in your recent transactions.", variant: "default" });
-        } else {
-            const totalFound = detected.subscriptions.length + detected.recurringPayments.length;
-            toast({ title: "Subscriptions Detected", description: `Found ${totalFound} potential subscription(s).`, variant: "default" });
-        }
-    } catch (error: any) {
-        console.error("Error detecting subscriptions:", error);
-        toast({ title: "Detection Error", description: error.message || "Could not analyze transactions for subscriptions.", variant: "destructive" });
-        setSubscriptionResults(null);
-    } finally {
-        setIsSubscriptionLoading(false);
-    }
-  };
-
-  const handleCreateBudgetsFromSubscriptions = async (subscriptions: DetectedSubscription[]) => {
-    try {
-      const userIdForBudgets = user?.uid || GUEST_USER_ID;
-      await createBudgetsForSubscriptions(userIdForBudgets, subscriptions);
-      await loadBudgetsAndTransactions(userIdForBudgets); // Refresh the budgets list
-      setShowSubscriptionDialog(false);
-      toast({ 
-        title: "Budgets Created", 
-        description: `Successfully created ${subscriptions.length} budget(s) from detected subscriptions.`, 
-        variant: "default" 
-      });
-    } catch (error: any) {
-      console.error("Error creating budgets from subscriptions:", error);
-      toast({ 
-        title: "Error", 
-        description: error.message || "Could not create budgets from subscriptions.", 
-        variant: "destructive" 
-      });
-    }
-  };
-
   const handleAddSubscriptionAsBudget = (item: IdentifiedRecurringExpense) => {
     setCurrentBudget({
         category: item.likelyServiceName,
@@ -710,9 +634,6 @@ export default function BudgetsPage() {
           <div className="flex flex-col sm:flex-row gap-2">
             <Button onClick={handleOpenSubscriptionHelper} variant="outline" className="rounded-full shadow-sm hover:shadow-md transition-shadow">
               <ListChecks className="mr-2 h-5 w-5" /> Subscription Budget Helper
-            </Button>
-            <Button onClick={handleDetectSubscriptions} variant="outline" className="rounded-full shadow-sm hover:shadow-md transition-shadow">
-              <Search className="mr-2 h-5 w-5" /> Detect Subscriptions
             </Button>
             <Button onClick={openNewDialog} className="rounded-full shadow-md hover:shadow-lg transition-shadow bg-gradient-to-br from-[hsl(var(--primary-gradient-start))] to-[hsl(var(--primary-gradient-end))] text-primary-foreground">
               <PlusCircle className="mr-2 h-5 w-5" /> Set New Budget
@@ -975,155 +896,6 @@ export default function BudgetsPage() {
             )}
           </div>
           <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline" className="rounded-full">Close</Button>
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Subscription Detection Dialog */}
-      <Dialog open={showSubscriptionDialog} onOpenChange={setShowSubscriptionDialog}>
-        <DialogContent className="sm:max-w-2xl rounded-lg p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="font-headline flex items-center gap-2">
-              <Search className="h-6 w-6 text-primary" />
-              Subscription Detection
-            </DialogTitle>
-            <DialogDescription>
-              Advanced pattern analysis to detect recurring subscriptions and payments from your transaction history.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 max-h-[70vh] overflow-y-auto space-y-4 pr-2">
-            {isSubscriptionLoading && (
-              <div className="flex justify-center items-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="ml-2 text-muted-foreground">Analyzing transaction patterns...</p>
-              </div>
-            )}
-            {!isSubscriptionLoading && subscriptionResults === null && (
-              <div className="text-center py-8">
-                <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">Ready to analyze your transactions for subscription patterns.</p>
-              </div>
-            )}
-            {!isSubscriptionLoading && subscriptionResults && (
-              <div className="space-y-6">
-                {/* Subscriptions Section */}
-                {subscriptionResults.subscriptions.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                      <Repeat className="h-5 w-5 text-green-600" />
-                      Detected Subscriptions ({subscriptionResults.subscriptions.length})
-                    </h3>
-                    <div className="space-y-2">
-                      {subscriptionResults.subscriptions.map((subscription, index) => (
-                        <Card key={index} className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 p-3">
-                          <div className="flex justify-between items-center gap-2">
-                            <div className="flex-grow min-w-0">
-                              <p className="font-semibold truncate">{subscription.name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                ₹{subscription.amount.toFixed(2)} · {subscription.frequency} · {subscription.category}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {subscription.transactionCount} transactions · {Math.round(subscription.confidence * 100)}% confidence
-                              </p>
-                            </div>
-                            <Button 
-                              size="sm" 
-                              onClick={() => handleCreateBudgetsFromSubscriptions([subscription])}
-                              className="rounded-full flex-shrink-0"
-                            >
-                              <PlusCircle className="mr-1.5 h-4 w-4" /> Create Budget
-                            </Button>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Recurring Payments Section */}
-                {subscriptionResults.recurringPayments.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                      <Calendar className="h-5 w-5 text-blue-600" />
-                      Recurring Payments ({subscriptionResults.recurringPayments.length})
-                    </h3>
-                    <div className="space-y-2">
-                      {subscriptionResults.recurringPayments.map((payment, index) => (
-                        <Card key={index} className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 p-3">
-                          <div className="flex justify-between items-center gap-2">
-                            <div className="flex-grow min-w-0">
-                              <p className="font-semibold truncate">{payment.name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                ₹{payment.amount.toFixed(2)} · {payment.frequency} · {payment.category}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {payment.transactionCount} transactions · {Math.round(payment.confidence * 100)}% confidence
-                              </p>
-                            </div>
-                            <Button 
-                              size="sm" 
-                              onClick={() => handleCreateBudgetsFromSubscriptions([payment])}
-                              className="rounded-full flex-shrink-0"
-                            >
-                              <PlusCircle className="mr-1.5 h-4 w-4" /> Create Budget
-                            </Button>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Summary Section */}
-                {(subscriptionResults.subscriptions.length > 0 || subscriptionResults.recurringPayments.length > 0) && (
-                  <div className="bg-muted/50 p-4 rounded-lg">
-                    <h4 className="font-semibold mb-2">Summary</h4>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">Total Monthly Impact</p>
-                        <p className="font-semibold">₹{subscriptionResults.suggestions.totalMonthlySubscriptions.toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Potential Savings</p>
-                        <p className="font-semibold text-orange-600">₹{subscriptionResults.suggestions.potentialSavings.toFixed(2)}</p>
-                      </div>
-                    </div>
-                    {subscriptionResults.suggestions.unusedSubscriptions.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs text-muted-foreground">
-                          {subscriptionResults.suggestions.unusedSubscriptions.length} potentially unused subscription(s) identified
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* No Results */}
-                {subscriptionResults.subscriptions.length === 0 && subscriptionResults.recurringPayments.length === 0 && (
-                  <div className="text-center py-8">
-                    <AlertTriangle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">No recurring patterns detected in your recent transactions.</p>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Try importing more transaction data or check back after a few more months of spending activity.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          <DialogFooter className="flex gap-2">
-            {subscriptionResults && (subscriptionResults.subscriptions.length > 0 || subscriptionResults.recurringPayments.length > 0) && (
-              <Button 
-                onClick={() => handleCreateBudgetsFromSubscriptions([...subscriptionResults.subscriptions, ...subscriptionResults.recurringPayments])}
-                className="rounded-full"
-              >
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Create All Budgets
-              </Button>
-            )}
             <DialogClose asChild>
               <Button variant="outline" className="rounded-full">Close</Button>
             </DialogClose>

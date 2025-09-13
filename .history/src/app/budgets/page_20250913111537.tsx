@@ -5,7 +5,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, CheckCircle2, CalendarDays, CalendarRange, ListChecks, Sparkles, IndianRupee, Repeat, Search, Calendar } from "lucide-react";
+import { PlusCircle, Edit2, Trash2, AlertTriangle, Loader2, CheckCircle2, CalendarDays, CalendarRange, ListChecks, Sparkles, IndianRupee, Repeat, Search } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import {
   Dialog,

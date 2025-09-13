@@ -51,10 +51,6 @@ const transactionFaqs = [
     answer: "Click the 'Add New Transaction' button. You'll be prompted to fill in details like type (income/expense/subscription), amount, date, category (or subscription name), and description. AI assistance is available for categorization and description generation.",
   },
   {
-    question: "Can I import transactions from my bank statement?",
-    answer: "Yes! Click the 'Import PDF' button to upload your bank statement PDF. Our AI will automatically extract transaction data, categorize them, and let you review before importing. Supports password-protected PDFs and most Indian bank formats.",
-  },
-  {
     question: "What's the 'Subscription' type for?",
     answer: "The 'Subscription' type helps you specifically flag recurring payments like Netflix, Spotify, etc. The category field should then be used for the name of the subscription service. This helps the AI better monitor these types of expenses.",
   },
@@ -85,10 +81,6 @@ const transactionFaqs = [
   {
     question: "How does Guest Mode work for transactions?",
     answer: "In Guest Mode, your transactions are saved locally in your browser. They are not synced to the cloud and will be lost if you clear your browser data or switch devices. To save data permanently, please sign up for a free account."
-  },
-  {
-    question: "Does PDF import work with password-protected bank statements?",
-    answer: "Yes, the system can handle password-protected PDFs. You'll be prompted to enter the password during the import process. For security, all PDF processing happens locally in your browser."
   }
 ];
 
@@ -493,11 +485,6 @@ export default function TransactionsPage() {
           <div className="flex gap-2">
             <Button onClick={() => setIsExportDialogOpen(true)} variant="outline" className="rounded-full shadow-sm hover:shadow-md">
               <Download className="mr-2 h-4 w-4" /> Export Transactions
-            </Button>
-            <Button asChild variant="outline" className="rounded-full shadow-sm hover:shadow-md">
-              <Link href="/transactions/import">
-                <Upload className="mr-2 h-4 w-4" /> Import PDF
-              </Link>
             </Button>
             <Button asChild className="rounded-full shadow-md hover:shadow-lg transition-shadow bg-gradient-to-br from-[hsl(var(--primary-gradient-start))] to-[hsl(var(--primary-gradient-end))] text-primary-foreground">
               <Link href="/transactions/new">
