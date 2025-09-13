@@ -435,7 +435,7 @@ export default function TransactionsPage() {
           4: { halign: 'right', cellWidth: 65 }, 
           5: { halign: 'center', cellWidth: 50 } 
         },
-        didDrawCell: (data: any) => {
+        didDrawCell: (data) => {
           if (data.column.index === 4 && data.row.section === 'body') { 
             const amount = parseFloat(data.cell.raw as string);
             if (amount < 0) {
@@ -445,7 +445,7 @@ export default function TransactionsPage() {
             }
           }
         },
-        didDrawPage: function (data: any) {
+        didDrawPage: function (data) {
           doc.setFontSize(8);
           doc.setTextColor(...PDF_MUTED_COLOR_RGB);
           const pageCount = doc.getNumberOfPages ? doc.getNumberOfPages() : (doc as any).internal.getNumberOfPages();

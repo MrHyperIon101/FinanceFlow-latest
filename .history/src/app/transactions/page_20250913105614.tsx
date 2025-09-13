@@ -101,12 +101,12 @@ function hslToRgb(h:number, s:number, l:number): [number, number, number] {
   return [Math.round(255 * f(0)), Math.round(255 * f(8)), Math.round(255 * f(4))];
 }
 
-const PDF_PRIMARY_COLOR_RGB: [number, number, number] = hslToRgb(217, 91, 60); 
-const PDF_ACCENT_COLOR_RGB: [number, number, number] = hslToRgb(258, 46, 63); 
-const PDF_TEXT_COLOR_DARK: [number, number, number] = [33, 33, 33];
-const PDF_TEXT_COLOR_LIGHT: [number, number, number] = [255, 255, 255];
-const PDF_MUTED_COLOR_RGB: [number, number, number] = [100, 100, 100];
-const PDF_BACKGROUND_ALT_ROW_RGB: [number, number, number] = [245, 245, 245];
+const PDF_PRIMARY_COLOR_RGB = hslToRgb(217, 91, 60); 
+const PDF_ACCENT_COLOR_RGB = hslToRgb(258, 46, 63); 
+const PDF_TEXT_COLOR_DARK = [33, 33, 33];
+const PDF_TEXT_COLOR_LIGHT = [255, 255, 255];
+const PDF_MUTED_COLOR_RGB = [100, 100, 100];
+const PDF_BACKGROUND_ALT_ROW_RGB = [245, 245, 245];
 
 const months = [
   { value: "01", label: "January" }, { value: "02", label: "February" },
@@ -123,7 +123,7 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortConfig, setSortConfig] = useState<{ key: SortKey | null; direction: 'ascending' | 'descending' }>({ key: 'date', direction: 'descending' });
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'date', direction: 'descending' });
   const { toast } = useToast();
 
   const [filterYear, setFilterYear] = useState<string>(ALL_YEARS_VALUE); 
@@ -239,16 +239,11 @@ export default function TransactionsPage() {
 
     if (sortConfig.key) {
       itemsToProcess.sort((a, b) => {
-        const sortKey = sortConfig.key!;
-        const valA = a[sortKey];
-        const valB = b[sortKey];
+        const valA = a[sortConfig.key!];
+        const valB = b[sortConfig.key!];
 
-        if (sortKey === 'date') {
-          const dateA = valA as string;
-          const dateB = valB as string;
-          return sortConfig.direction === 'ascending' 
-            ? new Date(dateA).getTime() - new Date(dateB).getTime() 
-            : new Date(dateB).getTime() - new Date(dateA).getTime();
+        if (sortConfig.key === 'date') {
+          return sortConfig.direction === 'ascending' ? new Date(valA).getTime() - new Date(valB).getTime() : new Date(valB).getTime() - new Date(valA).getTime();
         }
         if (typeof valA === 'number' && typeof valB === 'number') {
           return sortConfig.direction === 'ascending' ? valA - valB : valB - valA;
@@ -435,7 +430,7 @@ export default function TransactionsPage() {
           4: { halign: 'right', cellWidth: 65 }, 
           5: { halign: 'center', cellWidth: 50 } 
         },
-        didDrawCell: (data: any) => {
+        didDrawCell: (data) => {
           if (data.column.index === 4 && data.row.section === 'body') { 
             const amount = parseFloat(data.cell.raw as string);
             if (amount < 0) {
@@ -445,7 +440,7 @@ export default function TransactionsPage() {
             }
           }
         },
-        didDrawPage: function (data: any) {
+        didDrawPage: function (data) {
           doc.setFontSize(8);
           doc.setTextColor(...PDF_MUTED_COLOR_RGB);
           const pageCount = doc.getNumberOfPages ? doc.getNumberOfPages() : (doc as any).internal.getNumberOfPages();
