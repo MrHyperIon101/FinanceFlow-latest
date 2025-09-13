@@ -241,74 +241,39 @@ const parseBankStatementFlow = ai.defineFlow(
 
     // Helper function to process large documents in chunks
     async function processLargeDocument(input: ParseBankStatementInput, chunkSize: number): Promise<ParseBankStatementOutput> {
-      const text = input.rawText;
+      const lines = input.rawText.split('\n');
       const chunks: string[] = [];
+      let currentChunk = '';
       
-      console.log(`Splitting ${text.length} characters into chunks of max ${chunkSize} characters...`);
+      console.log(`Splitting ${lines.length} lines into chunks of max ${chunkSize} characters...`);
       
-      // If the text has line breaks, use line-based chunking
-      const lines = text.split('\n');
-      if (lines.length > 10) {
-        console.log(`Text has ${lines.length} lines, using line-based chunking...`);
+      // Split by lines to maintain transaction integrity
+      for (const line of lines) {
+        const lineWithNewline = (currentChunk ? '\n' : '') + line;
         
-        let currentChunk = '';
-        for (const line of lines) {
-          const lineWithNewline = (currentChunk ? '\n' : '') + line;
-          
-          if (currentChunk.length + lineWithNewline.length > chunkSize && currentChunk.length > 0) {
-            chunks.push(currentChunk.trim());
-            console.log(`Created chunk ${chunks.length}: ${currentChunk.length} characters`);
-            currentChunk = line;
-          } else {
-            currentChunk += lineWithNewline;
-          }
-        }
-        
-        if (currentChunk.trim()) {
+        // Check if adding this line would exceed the chunk size
+        if (currentChunk.length + lineWithNewline.length > chunkSize && currentChunk.length > 0) {
+          // Save current chunk and start new one
           chunks.push(currentChunk.trim());
-          console.log(`Created final chunk ${chunks.length}: ${currentChunk.length} characters`);
+          console.log(`Created chunk ${chunks.length}: ${currentChunk.length} characters`);
+          currentChunk = line; // Start new chunk with current line
+        } else {
+          // Add line to current chunk
+          currentChunk += lineWithNewline;
         }
-      } else {
-        // Text is mostly on one line, use character-based chunking with smart breaks
-        console.log(`Text has only ${lines.length} lines, using character-based chunking...`);
-        
-        let i = 0;
-        while (i < text.length) {
-          let chunkEnd = Math.min(i + chunkSize, text.length);
-          
-          // Try to break at a reasonable boundary (space, period, or common transaction delimiters)
-          if (chunkEnd < text.length) {
-            const searchStart = Math.max(chunkEnd - 200, i); // Look back up to 200 chars
-            const breakPoints = [
-              text.lastIndexOf(' UPI ', chunkEnd),
-              text.lastIndexOf(' NEFT ', chunkEnd),
-              text.lastIndexOf(' RTGS ', chunkEnd),
-              text.lastIndexOf(' ATM ', chunkEnd),
-              text.lastIndexOf(' CARD ', chunkEnd),
-              text.lastIndexOf('. ', chunkEnd),
-              text.lastIndexOf(' ', chunkEnd)
-            ].filter(pos => pos >= searchStart);
-            
-            if (breakPoints.length > 0) {
-              chunkEnd = Math.max(...breakPoints) + 1;
-            }
-          }
-          
-          const chunk = text.substring(i, chunkEnd).trim();
-          if (chunk) {
-            chunks.push(chunk);
-            console.log(`Created chunk ${chunks.length}: ${chunk.length} characters (pos ${i}-${chunkEnd})`);
-          }
-          
-          i = chunkEnd; // Move to the next position
-        }
+      }
+      
+      // Don't forget the last chunk
+      if (currentChunk.trim()) {
+        chunks.push(currentChunk.trim());
+        console.log(`Created final chunk ${chunks.length}: ${currentChunk.length} characters`);
       }
       
       console.log(`📊 Document split into ${chunks.length} chunks (target size: ${chunkSize} chars)`);
       
       // Validate chunk sizes
       chunks.forEach((chunk, index) => {
-        if (chunk.length > chunkSize * 1.2) { // Allow 20% tolerance for character-based chunking
+        if (chunk.length > chunkSize * 1.1) { // Allow 10% tolerance
           console.warn(`⚠️ Chunk ${index + 1} is larger than expected: ${chunk.length} chars`);
         }
       });

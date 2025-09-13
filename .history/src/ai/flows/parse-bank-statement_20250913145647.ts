@@ -227,100 +227,55 @@ const parseBankStatementFlow = ai.defineFlow(
   },
   async (input: ParseBankStatementInput) => {
     // Check input size and implement chunking for large documents
-    // Reduced chunk size to handle AI output token limits - keeps chunks small enough to avoid JSON truncation
-    const MAX_CHUNK_SIZE = 20000; // Smaller chunks to prevent AI response truncation (~100-120 transactions max)
+    // Reduced chunk size to handle AI output token limits (max ~150 transactions per chunk)
+    const MAX_CHUNK_SIZE = 15000; // Smaller chunks to avoid AI output truncation
     const inputText = input.rawText;
     
     console.log(`Processing bank statement with ${inputText.length} characters`);
     
     // If text is too large, implement chunking strategy
     if (inputText.length > MAX_CHUNK_SIZE) {
-      console.log('📄 Large document detected, implementing chunking strategy to avoid truncation...');
+      console.log('Large document detected, implementing chunking strategy...');
       return await processLargeDocument(input, MAX_CHUNK_SIZE);
     }
 
     // Helper function to process large documents in chunks
     async function processLargeDocument(input: ParseBankStatementInput, chunkSize: number): Promise<ParseBankStatementOutput> {
-      const text = input.rawText;
+      const lines = input.rawText.split('\n');
       const chunks: string[] = [];
+      let currentChunk = '';
       
-      console.log(`Splitting ${text.length} characters into chunks of max ${chunkSize} characters...`);
-      
-      // If the text has line breaks, use line-based chunking
-      const lines = text.split('\n');
-      if (lines.length > 10) {
-        console.log(`Text has ${lines.length} lines, using line-based chunking...`);
+      // Split by lines to maintain transaction integrity with some overlap
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
         
-        let currentChunk = '';
-        for (const line of lines) {
-          const lineWithNewline = (currentChunk ? '\n' : '') + line;
-          
-          if (currentChunk.length + lineWithNewline.length > chunkSize && currentChunk.length > 0) {
-            chunks.push(currentChunk.trim());
-            console.log(`Created chunk ${chunks.length}: ${currentChunk.length} characters`);
-            currentChunk = line;
-          } else {
-            currentChunk += lineWithNewline;
-          }
-        }
-        
-        if (currentChunk.trim()) {
+        if (currentChunk.length + line.length > chunkSize && currentChunk.length > 0) {
           chunks.push(currentChunk.trim());
-          console.log(`Created final chunk ${chunks.length}: ${currentChunk.length} characters`);
-        }
-      } else {
-        // Text is mostly on one line, use character-based chunking with smart breaks
-        console.log(`Text has only ${lines.length} lines, using character-based chunking...`);
-        
-        let i = 0;
-        while (i < text.length) {
-          let chunkEnd = Math.min(i + chunkSize, text.length);
           
-          // Try to break at a reasonable boundary (space, period, or common transaction delimiters)
-          if (chunkEnd < text.length) {
-            const searchStart = Math.max(chunkEnd - 200, i); // Look back up to 200 chars
-            const breakPoints = [
-              text.lastIndexOf(' UPI ', chunkEnd),
-              text.lastIndexOf(' NEFT ', chunkEnd),
-              text.lastIndexOf(' RTGS ', chunkEnd),
-              text.lastIndexOf(' ATM ', chunkEnd),
-              text.lastIndexOf(' CARD ', chunkEnd),
-              text.lastIndexOf('. ', chunkEnd),
-              text.lastIndexOf(' ', chunkEnd)
-            ].filter(pos => pos >= searchStart);
-            
-            if (breakPoints.length > 0) {
-              chunkEnd = Math.max(...breakPoints) + 1;
-            }
-          }
-          
-          const chunk = text.substring(i, chunkEnd).trim();
-          if (chunk) {
-            chunks.push(chunk);
-            console.log(`Created chunk ${chunks.length}: ${chunk.length} characters (pos ${i}-${chunkEnd})`);
-          }
-          
-          i = chunkEnd; // Move to the next position
+          // Add some overlap (last 5 lines) to avoid missing transactions at chunk boundaries
+          const chunkLines = currentChunk.split('\n');
+          const overlapLines = chunkLines.slice(-5);
+          currentChunk = overlapLines.join('\n') + '\n' + line;
+        } else {
+          currentChunk += (currentChunk ? '\n' : '') + line;
         }
       }
       
-      console.log(`📊 Document split into ${chunks.length} chunks (target size: ${chunkSize} chars)`);
+      if (currentChunk.trim()) {
+        chunks.push(currentChunk.trim());
+      }
       
-      // Validate chunk sizes
-      chunks.forEach((chunk, index) => {
-        if (chunk.length > chunkSize * 1.2) { // Allow 20% tolerance for character-based chunking
-          console.warn(`⚠️ Chunk ${index + 1} is larger than expected: ${chunk.length} chars`);
-        }
-      });
+      console.log(`📊 Document split into ${chunks.length} chunks for processing`);
       
       // Process each chunk
       const allTransactions: any[] = [];
+      const processedTransactionHashes = new Set<string>(); // To remove duplicates from overlap
       let accountNumber: string | undefined;
       let bankName: string | undefined;
       let statementPeriod: string | undefined;
       
       for (let i = 0; i < chunks.length; i++) {
-        console.log(`Processing chunk ${i + 1}/${chunks.length} (${chunks[i].length} chars)`);
+        console.log(`🔄 Processing chunk ${i + 1}/${chunks.length} (${chunks[i].length} chars)`);
         
         try {
           const chunkInput = {
@@ -329,6 +284,33 @@ const parseBankStatementFlow = ai.defineFlow(
           };
           
           const output = await attemptAIParsingWithRetry(chunkInput);
+          
+          if (output.transactions && Array.isArray(output.transactions)) {
+            // Add transactions while checking for duplicates
+            for (const transaction of output.transactions) {
+              const transactionHash = `${transaction.date}_${transaction.description}_${transaction.amount}_${transaction.type}`;
+              
+              if (!processedTransactionHashes.has(transactionHash)) {
+                processedTransactionHashes.add(transactionHash);
+                allTransactions.push(transaction);
+              }
+            }
+            
+            console.log(`✅ Chunk ${i + 1}: Found ${output.transactions.length} transactions (${allTransactions.length} total)`);
+          }
+          
+          // Capture metadata from the first chunk
+          if (i === 0) {
+            accountNumber = output.accountNumber;
+            bankName = output.bankName;
+            statementPeriod = output.statementPeriod;
+          }
+          
+        } catch (chunkError) {
+          console.error(`❌ Error processing chunk ${i + 1}:`, chunkError);
+          // Continue with other chunks even if one fails
+        }
+      }
           
           if (output.transactions) {
             allTransactions.push(...output.transactions);
@@ -371,15 +353,12 @@ const parseBankStatementFlow = ai.defineFlow(
           ) === index;
         });
       
-      const duplicatesRemoved = allTransactions.length - processedTransactions.length;
-      console.log(`✅ Processed ${chunks.length} chunks: ${allTransactions.length} total → ${processedTransactions.length} unique (${duplicatesRemoved} duplicates removed)`);
-      
       return {
         transactions: processedTransactions,
         accountNumber,
         statementPeriod,
         bankName,
-        parsingNotes: `Successfully processed ${chunks.length} document chunks. Found ${allTransactions.length} transactions, removed ${duplicatesRemoved} duplicates. Final result: ${processedTransactions.length} unique transactions.`
+        parsingNotes: `Successfully processed ${processedTransactions.length} transactions from ${chunks.length} document chunks. ${allTransactions.length - processedTransactions.length} duplicates removed.`
       };
     }
     // Helper function to extract a field value from a JSON string

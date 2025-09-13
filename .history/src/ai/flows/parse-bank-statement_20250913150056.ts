@@ -272,8 +272,7 @@ const parseBankStatementFlow = ai.defineFlow(
         // Text is mostly on one line, use character-based chunking with smart breaks
         console.log(`Text has only ${lines.length} lines, using character-based chunking...`);
         
-        let i = 0;
-        while (i < text.length) {
+        for (let i = 0; i < text.length; i += chunkSize) {
           let chunkEnd = Math.min(i + chunkSize, text.length);
           
           // Try to break at a reasonable boundary (space, period, or common transaction delimiters)
@@ -297,10 +296,9 @@ const parseBankStatementFlow = ai.defineFlow(
           const chunk = text.substring(i, chunkEnd).trim();
           if (chunk) {
             chunks.push(chunk);
-            console.log(`Created chunk ${chunks.length}: ${chunk.length} characters (pos ${i}-${chunkEnd})`);
+            console.log(`Created chunk ${chunks.length}: ${chunk.length} characters`);
+            i = chunkEnd - 1; // Adjust for the loop increment
           }
-          
-          i = chunkEnd; // Move to the next position
         }
       }
       
