@@ -272,10 +272,6 @@ const parseBankStatementFlow = ai.defineFlow(
         // Text is mostly on one line, use character-based chunking with smart breaks
         console.log(`Text has only ${lines.length} lines, using character-based chunking...`);
         
-        // Extract potential header/metadata from the beginning (first 1000 chars)
-        const headerSection = text.substring(0, Math.min(1000, text.length));
-        const hasHeaderInfo = headerSection.match(/(bank|account|statement|balance|transaction)/i);
-        
         let i = 0;
         while (i < text.length) {
           let chunkEnd = Math.min(i + chunkSize, text.length);
@@ -311,14 +307,7 @@ const parseBankStatementFlow = ai.defineFlow(
             }
           }
           
-          let chunk = text.substring(i, chunkEnd).trim();
-          
-          // For chunks after the first one, prepend some header context if available
-          if (chunks.length > 0 && hasHeaderInfo && i > 0) {
-            const contextPrefix = `Bank Statement Context: ${headerSection.substring(0, 300).trim()}\n\nTransactions:\n`;
-            chunk = contextPrefix + chunk;
-          }
-          
+          const chunk = text.substring(i, chunkEnd).trim();
           if (chunk) {
             chunks.push(chunk);
             console.log(`Created chunk ${chunks.length}: ${chunk.length} characters (pos ${i}-${chunkEnd})`);
